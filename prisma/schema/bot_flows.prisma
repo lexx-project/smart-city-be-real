@@ -1,0 +1,65 @@
+// Bot Flow: Alur percakapan chatbot per kategori layanan
+// Dikelola melalui CMS oleh admin
+
+model BotFlow {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId  String?  @map("category_id") @db.Uuid  // null = flow global (e.g. greeting)
+  flowName    String   @map("flow_name") @db.VarChar
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  category  Category?      @relation(fields: [categoryId], references: [id])
+  steps     BotFlowStep[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@map("bot_flows")
+}
+
+model BotFlowStep {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowId         String   @map("flow_id") @db.Uuid
+  stepKey        String   @map("step_key") @db.VarChar     // e.g. "ask_name", "ask_nik"
+  stepOrder      Int      @map("step_order")
+  inputType      String   @map("input_type") @db.VarChar   // text, number, select, confirmation, info
+  isRequired     Boolean  @default(true) @map("is_required")
+  validationRule String?  @map("validation_rule") @db.VarChar  // e.g. "regex:/^[0-9]{16}$/"
+  nextStepKey    String?  @map("next_step_key") @db.VarChar    // null = end of flow
+
+  createdAt      DateTime? @default(now()) @map("created_at")
+  updatedAt      DateTime? @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // Relations
+  flow     BotFlow      @relation(fields: [flowId], references: [id])
+  messages BotMessage[]
+
+  @@index([flowId])
+  @@index([stepKey])
+  @@map("bot_flow_steps")
+}
+
+model BotMessage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  flowStepId  String?  @map("flow_step_id") @db.Uuid     // null = pesan global (bukan bagian step)
+  messageKey  String   @unique @map("message_key") @db.VarChar // e.g. "greeting", "timeout", "success", "invalid_input"
+  messageType String   @map("message_type") @db.VarChar  // question, success, error, confirmation, greeting, timeout, info
+  messageText String   @map("message_text") @db.Text
+  metadata    Json?    // e.g. { "buttons": ["Ya", "Tidak"], "image_url": "..." }
+
+  createdAt   DateTime? @default(now()) @map("created_at")
+  updatedAt   DateTime? @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  flowStep BotFlowStep? @relation(fields: [flowStepId], references: [id])
+
+  @@index([flowStepId])
+  @@index([messageKey])
+  @@map("bot_messages")
+}
