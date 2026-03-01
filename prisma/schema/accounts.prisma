@@ -2,7 +2,7 @@ model Account {
   id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   accountId             String    @map("account_id")
   providerId            String    @map("provider_id")
-  userId                String    @db.Uuid @map("user_id")
+  userId                String    @map("user_id") @db.Uuid
   accessToken           String?   @map("access_token")
   refreshToken          String?   @map("refresh_token")
   idToken               String?   @map("id_token")
