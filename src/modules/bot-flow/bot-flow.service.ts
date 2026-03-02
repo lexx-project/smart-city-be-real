@@ -76,33 +76,58 @@ export class BotFlowService {
     // ─────────────────────────────────────────────
 
     async getPublicMenu() {
-        const flow = await this.prisma.botFlow.findFirst({
+        // 1. Ambil semua flow yang aktif beserta step pertamanya (stepOrder = 1)
+        const flows = await this.prisma.botFlow.findMany({
             where: { isActive: true, deletedAt: null },
             include: {
                 steps: {
-                    where: { deletedAt: null },
-                    orderBy: { stepOrder: 'asc' },
-                    include: {
-                        messages: {
-                            where: { deletedAt: null },
-                            orderBy: { createdAt: 'asc' },
-                        },
-                    },
+                    where: { stepOrder: 1, deletedAt: null },
                 },
             },
             orderBy: { createdAt: 'asc' },
         });
 
-        if (!flow || flow.steps.length === 0) {
-            throw new NotFoundException('Bot flow menu tidak ditemukan');
+        if (flows.length === 0) {
+            throw new NotFoundException('Tidak ada menu layanan yang tersedia');
         }
 
-        // Schema saat ini belum punya kolom isRoot, jadi root diambil dari stepOrder paling awal.
-        const rootStep = flow.steps.find((step) => step.stepOrder === 1) ?? flow.steps[0];
-        return this.buildStepTree(rootStep, flow.steps);
+        // 2. Ambil pesan sapaan dari tabel BotMessage (atau gunakan fallback)
+        const greetingMsg = await this.getMessage(
+            'greeting',
+            'Halo! 👋 Selamat datang di Layanan Publik Pintar.\n\nSilakan pilih menu layanan di bawah ini:',
+        );
+
+        // 3. Susun anak-anak menu (children) berdasarkan flow yang ada
+        const children = flows.map((flow, index) => {
+            const firstStep = flow.steps[0];
+            if (!firstStep) return null;
+
+            return {
+                id: firstStep.id, // ID step pertama dari flow ini
+                stepOrder: index + 1, // Urutan 1, 2, 3...
+                stepKey: flow.flowName, // Nama flow dijadikan label menu
+            };
+        }).filter(Boolean);
+
+        // 4. Kembalikan sebuah "Virtual Root Node"
+        return {
+            id: 'root_menu',
+            stepKey: 'main_menu',
+            messages: [
+                {
+                    messageText: greetingMsg,
+                },
+            ],
+            children: children,
+        };
     }
 
     async getPublicStepById(id: string) {
+        // BYPASS: Jika bot meminta detail dari Virtual Root, kembalikan getPublicMenu()
+        if (id === 'root_menu') {
+            return this.getPublicMenu();
+        }
+
         const step = await this.prisma.botFlowStep.findFirst({
             where: { id, deletedAt: null, flow: { isActive: true, deletedAt: null } },
             include: {
